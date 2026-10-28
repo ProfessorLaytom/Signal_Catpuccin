@@ -2,8 +2,8 @@ name: Build Catppuccin Signal
 
 on:
   schedule:
-    - cron: '0 4 * * 0' # Automatically checks and builds every Sunday at 4:00 AM UTC
-  workflow_dispatch:      # Allows you to trigger a build manually anytime
+    - cron: '0 4 * * 0' # Checks and builds every Sunday at 4:00 AM UTC
+  workflow_dispatch:      # Allows manual trigger anytime
 
 permissions:
   contents: write
@@ -19,11 +19,11 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
       - name: Inject Catppuccin Mocha Mauve Colors
         run: |
@@ -45,7 +45,8 @@ jobs:
           sed -i 's/<color name="signal_dark_colorOnSurfaceVariant">.*<\/color>/<color name="signal_dark_colorOnSurfaceVariant">#A6ADC8<\/color>/' $FILE
 
       - name: Build Release APK
-        run: ./gradlew assemblePlayRelease --no-daemon
+        run: |
+          ./gradlew assemblePlayProdRelease --no-daemon --no-configuration-cache -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
 
       - name: Sign APK with Personal Key
         env:
@@ -54,9 +55,10 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
-          UNSIGNED_APK=$(find app/build/outputs/apk/play/release -name "*.apk" | head -n 1)
+          UNSIGNED_APK=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
           
-          $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
+          $APKSIGNER sign \
             --ks keystore.jks \
             --ks-pass pass:"$KEYSTORE_PASSWORD" \
             --ks-key-alias "$KEY_ALIAS" \
